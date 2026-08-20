@@ -1,11 +1,12 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routers import query
+from backend.app.routers import sql_router
+import uvicorn
 
 app = FastAPI(
-    title="Voice-to-SQL Query Engine API",
-    version="1.0.0",
-    description="Microservice translating natural voice transcripts into structured SQL commands."
+    title="Voice to SQL Query Engine API",
+    description="Natural language voice and text to SQL compilation engine with schema inspection and injection guardrails.",
+    version="1.0.0"
 )
 
 app.add_middleware(
@@ -16,8 +17,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(query.router)
+app.include_router(sql_router.router)
 
-@app.get("/")
-def read_root():
-    return {"message": "Voice-to-SQL Backend Engine is online!"}
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "voice-to-sql-query-engine"}
+
+if __name__ == "__main__":
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
