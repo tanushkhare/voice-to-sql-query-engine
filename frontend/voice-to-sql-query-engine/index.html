@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice to SQL Query Engine</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo">⚡ Voice to SQL Query Engine</div>
+      <div class="badge">Live Microservice Active</div>
+    </div>
+  </header>
+
+  <main class="main-layout">
+    <!-- Left Column: Query Ingestion -->
+    <section class="panel-left">
+      <h2>Natural Language & Speech Ingestion</h2>
+      <p class="subtitle">Compile natural conversational requests into optimized, injection-safe SQL queries with schema inspection.</p>
+
+      <div class="input-group">
+        <label for="tableSelect">Target Database Context Table</label>
+        <select id="tableSelect" class="text-input">
+          <option value="employees" selected>employees (id, name, department, salary, performance_score)</option>
+          <option value="orders">orders (order_id, customer_id, total_amount, order_date, status)</option>
+          <option value="products">products (product_id, name, category, price, stock_quantity)</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label for="queryInput">Natural Query Description</label>
+        <textarea id="queryInput" class="text-area" rows="4">Show me the average salary by department</textarea>
+      </div>
+
+      <button class="btn primary-btn" onclick="compileSQL()">Compile & Execute SQL Query</button>
+
+      <div class="log-card">
+        <h4>AST Compiler Telemetry</h4>
+        <div id="logBox" class="terminal-log">Awaiting natural language input query...</div>
+      </div>
+    </section>
+
+    <!-- Right Column: Generated SQL & Sandbox -->
+    <aside class="panel-right">
+      <h2>Synthesized SQL & Sandbox Preview</h2>
+
+      <div class="card">
+        <h3>Generated SQL Query</h3>
+        <pre id="sqlOutput" style="background:#0f172a; padding:0.75rem; border-radius:0.5rem; color:#38bdf8; font-family:monospace; margin-top:0.5rem; white-space:pre-wrap; border:1px solid #334155;">-- Generated SQL statement will appear here</pre>
+        <p id="sqlExplanation" style="color:#94a3b8; font-size:0.85rem; margin-top:0.5rem;">Awaiting compilation...</p>
+      </div>
+
+      <div class="card">
+        <h3>Execution Result Sandbox</h3>
+        <div id="resultTableContainer" style="overflow-x:auto; margin-top:0.5rem;">
+          <p style="font-size:0.85rem; color:#94a3b8;">No query executed yet.</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    async function compileSQL() {
+      const table = document.getElementById('tableSelect').value;
+      const query = document.getElementById('queryInput').value.trim();
+      const log = document.getElementById('logBox');
+
+      if (query.length < 4) {
+        alert("Please enter a valid query description.");
+        return;
+      }
+
+      log.innerText = `[${new Date().toLocaleTimeString()}] Parsing query AST: "${query}"\n[${new Date().toLocaleTimeString()}] Querying endpoint: /api/v1/sql/generate...`;
+
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/v1/sql/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query_text: query, target_table: table })
+        });
+
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+
+        const data = await res.json();
+        document.getElementById('sqlOutput').innerText = data.generated_sql;
+        document.getElementById('sqlExplanation').innerText = `💡 ${data.explanation} (Injection Safety Check: ${data.is_safe ? 'PASS' : 'FAIL'})`;
+
+        if (data.simulated_result && data.simulated_result.length > 0) {
+          const headers = Object.keys(data.simulated_result[0]);
+          let tableHtml = '<table style="width:100%; text-align:left; border-collapse:collapse; font-size:0.85rem;"><thead><tr style="border-bottom:1px solid #334155;">';
+          headers.forEach(h => tableHtml += `<th style="padding:0.4rem; color:#38bdf8;">${h}</th>`);
+          tableHtml += '</tr></thead><tbody>';
+          data.simulated_result.forEach(row => {
+            tableHtml += '<tr style="border-bottom:1px solid #1e293b;">';
+            headers.forEach(h => tableHtml += `<td style="padding:0.4rem; color:#cbd5e1;">${row[h]}</td>`);
+            tableHtml += '</tr>';
+          });
+          tableHtml += '</tbody></table>';
+          document.getElementById('resultTableContainer').innerHTML = tableHtml;
+        }
+
+        log.innerText += `\n[${new Date().toLocaleTimeString()}] 200 OK: SQL compiled and executed safely.`;
+      } catch (err) {
+        log.innerText += `\n[${new Date().toLocaleTimeString()}] Note: Backend offline (${err.message}). Running fallback simulation.`;
+
+        const fallbackSql = `SELECT department, AVG(salary) AS avg_salary FROM ${table} GROUP BY department;`;
+        document.getElementById('sqlOutput').innerText = fallbackSql;
+        document.getElementById('sqlExplanation').innerText = "💡 Aggregated average salary grouped by department (Simulation).";
+        document.getElementById('resultTableContainer').innerHTML = `
+          <table style="width:100%; text-align:left; border-collapse:collapse; font-size:0.85rem;">
+            <thead><tr style="border-bottom:1px solid #334155;"><th style="padding:0.4rem; color:#38bdf8;">department</th><th style="padding:0.4rem; color:#38bdf8;">avg_salary</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #1e293b;"><td style="padding:0.4rem;">Engineering</td><td style="padding:0.4rem;">142,500</td></tr>
+              <tr style="border-bottom:1px solid #1e293b;"><td style="padding:0.4rem;">Sales</td><td style="padding:0.4rem;">118,000</td></tr>
+            </tbody>
+          </table>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>
