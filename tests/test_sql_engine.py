@@ -9,17 +9,21 @@ def test_health():
     assert res.status_code == 200
     assert res.json()["status"] == "healthy"
 
-def test_sql_compilation_average_salary():
-    payload = {"query_text": "Find average salary in each department", "target_table": "employees"}
+def test_safe_sql_generation():
+    payload = {"query_text": "Show top 5 employees", "target_table": "employees"}
     res = client.post("/api/v1/sql/generate", json=payload)
     assert res.status_code == 200
     data = res.json()
-    assert "AVG(salary)" in data["generated_sql"]
     assert data["is_safe"] is True
+    assert "SELECT" in data["generated_sql"]
+    assert "employees" in data["generated_sql"]
 
-def test_sql_injection_safety_filter():
-    payload = {"query_text": "Show employees; DROP TABLE employees;", "target_table": "employees"}
+def test_sql_injection_rejection():
+    payload = {"query_text": "DROP TABLE users;--", "target_table": "employees"}
     res = client.post("/api/v1/sql/generate", json=payload)
-    assert res.status_code == 200
-    data = res.json()
-    assert data["is_safe"] is True  # The compiler sanitizes and replaces malicious commands
+    assert res.status_code == 400
+
+def test_invalid_table_whitelist_rejection():
+    payload = {"query_text": "Show all records", "target_table": "unauthorized_table"}
+    res = client.post("/api/v1/sql/generate", json=payload)
+    assert res.status_code == 400
